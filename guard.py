@@ -6,6 +6,29 @@ import socketserver
 import time
 import smtplib
 from email.mime.text import MIMEText
+import logging
+import datetime
+
+def setup_logging():
+    current_datetime = datetime.datetime.now()
+    log_timestamp = current_datetime.strftime("%Y-%m-%d_%H:%M")
+    log_filename = f"/home/guardlog/{log_timestamp}.txt"
+
+    log_format = "%(asctime)s - %(levelname)s - %(message)s"
+
+    logging.basicConfig(filename=log_filename, level=logging.INFO, format=log_format)
+
+    # Log to console as well
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(log_format)
+    console_handler.setFormatter(formatter)
+    logging.getLogger('').addHandler(console_handler)
+
+    logging.info("Logging started.")
+
+# Add this line at the beginning of your main() function or __main__ block
+setup_logging()
 
 def log_suspicious_activity(source_ip, port):
     config = load_config()
@@ -109,8 +132,9 @@ def main():
     open_tcp_ports = scan_ports(tcp_port_range)
     open_udp_ports = scan_ports(udp_port_range)
 
-    print("Open TCP Ports:", open_tcp_ports)
-    print("Open UDP Ports:", open_udp_ports)
+    logging.info("Open TCP Ports: %s", open_tcp_ports)
+    logging.info("Open UDP Ports: %s", open_udp_ports)
+
 
     unused_ports = show_unused_ports()
     print("Unused Ports:", unused_ports)
