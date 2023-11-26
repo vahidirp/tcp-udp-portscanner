@@ -2,7 +2,43 @@ import os
 import socket
 import subprocess
 import configparser
+import socketserver
 import time
+import smtplib
+from email.mime.text import MIMEText
+
+def log_suspicious_activity(source_ip, port):
+    config = load_config()
+    log_message = f"Suspicious activity from {source_ip} on port {port}"
+
+    with open(config['General']['log_file'], 'a') as log_file:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        log_file.write(f"{timestamp} - {log_message}\n")
+        print(log_message)
+
+    if config.getboolean('Email', 'send_notification', fallback=True):
+        send_email(log_message)
+
+def send_email(message):
+    config = load_config()
+    smtp_server = config['Email']['smtp_server']
+    smtp_port = config['Email']['smtp_port']
+    smtp_username = config['Email']['smtp_username']
+    smtp_password = config['Email']['smtp_password']
+    admin_email = config['Email']['admin_email']
+
+    subject = 'Suspicious Activity Detected'
+    body = f"Subject: {subject}\n\n{message}"
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.sendmail(smtp_username, admin_email, body)
+
+
+class OpenPortChecker(socketserver.BaseRequestHandler):
+    def handle(self):
+        pass  # Do nothing, just want to check if the port is open
 
 def load_config():
     config = configparser.ConfigParser()
@@ -12,6 +48,24 @@ def load_config():
 def parse_port_range(port_range):
     start, end = map(int, port_range.split('-'))
     return set(range(start, end + 1))
+
+def is_port_open(port):
+    try:
+        with socketserver.TCPServer(('localhost', port), OpenPortChecker) as server:
+            return True
+    except OSError:
+        return False
+
+def log_suspicious_activity(source_ip, port):
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    log_message = f"{timestamp} - Suspicious activity from {source_ip} on port {port}\n"
+    with open('suspicious_activity.log', 'a') as log_file:
+        log_file.write(log_message)
+    print(log_message)
+
+def block_ip(source_ip):
+    subprocess.run(['iptables', '-A', 'INPUT', '-s', source_ip, '-j', 'DROP'])
+    print(f"Blocked IP: {source_ip}")
 
 def scan_ports(port_range):
     config = load_config()
@@ -25,12 +79,11 @@ def scan_ports(port_range):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(scan_timeout)
                 try:
-                    start_time = time.time()
                     result = sock.connect_ex(('localhost', port))
-                    elapsed_time = time.time() - start_time
 
                     if result == 0:
-                        open_ports.append((port, elapsed_time))
+                        open_ports.append(port)
+                        log_suspicious_activity('localhost', port)
                 except Exception as e:
                     print(f"Error checking port {port}: {e}")
 
@@ -40,10 +93,9 @@ def show_unused_ports():
     # Your logic to find unused ports goes here
     pass
 
-def close_unused_ports(ports):
-    for port in ports:
-        subprocess.run(['iptables', '-A', 'INPUT', '-p', 'tcp', '--dport', str(port), '-j', 'DROP'])
-        subprocess.run(['iptables', '-A', 'INPUT', '-p', 'udp', '--dport', str(port), '-j', 'DROP'])
+def block_suspicious_ips():
+    # Your logic to block suspicious IPs goes here
+    pass
 
 def get_open_ports():
     # Your logic to get open ports and their protocols goes here
@@ -63,7 +115,8 @@ def main():
     unused_ports = show_unused_ports()
     print("Unused Ports:", unused_ports)
 
-    close_unused_ports(unused_ports)
+    if config.getboolean('General', 'block_suspicious_ips', fallback=False):
+        block_suspicious_ips()
 
     open_ports = get_open_ports()
     print("Open Ports in use:", open_ports)
