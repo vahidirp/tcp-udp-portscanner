@@ -12,7 +12,12 @@ import datetime
 def setup_logging():
     current_datetime = datetime.datetime.now()
     log_timestamp = current_datetime.strftime("%Y-%m-%d_%H:%M")
-    log_filename = f"/home/guardlog/{log_timestamp}.txt"
+    log_directory = "/home/guardlog/"
+    log_filename = f"{log_directory}{log_timestamp}.txt"
+
+    # Create the log directory if it doesn't exist
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
 
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
 
